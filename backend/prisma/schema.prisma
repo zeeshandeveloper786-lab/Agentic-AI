@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+
+
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  password         String
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  isVerified       Boolean  @default(false)
+  verificationCode String?
+  verificationCodeExpiry DateTime?
+  createdAt        DateTime @default(now())
+  deletedAt        DateTime?
+
+  agents    Agent[]
+  apiKeys   ApiKey[]
+}
+
+model Agent {
+  id            String   @id @default(uuid())
+  userId        String
+  agentName     String
+  description   String?
+  modelProvider String
+  modelName     String
+  systemPrompt  String
+  createdAt     DateTime @default(now())
+  deletedAt     DateTime?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tools         Tool[]
+  documents     Document[]
+  chatMessages  ChatMessage[]
+  chatSessions  ChatSession[]
+
+  @@index([userId])
+}
+
+model ChatSession {
+  id        String   @id @default(uuid())
+  agentId   String
+  userId    String
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([agentId, userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  sessionId String?
+  agentId   String
+  userId    String
+  role      String   // 'user' | 'assistant'
+  content   String
+  createdAt DateTime @default(now())
+
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  session   ChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, userId])
+  @@index([sessionId])
+}
+
+model ApiKey {
+  id           String   @id @default(uuid())
+  userId       String
+  provider     String   // openai | gemini | tavily
+  encryptedKey String
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model Tool {
+  id          String   @id @default(uuid())
+  agentId     String
+  toolType    ToolType
+  name        String
+  description String?
+  code        String?  // only for custom tools
+  createdAt   DateTime @default(now())
+
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+}
+
+enum ToolType {
+  BUILT_IN
+  CUSTOM
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  agentId       String
+  fileName      String
+  fileType      String
+  createdAt     DateTime @default(now())
+
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  embeddings    Embedding[]
+
+  @@index([agentId])
+}
+
+model Embedding {
+  id         String   @id @default(uuid())
+  documentId String
+  content    String
+  embedding  Unsupported("vector")
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
